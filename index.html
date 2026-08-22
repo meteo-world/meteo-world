@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Météo World - Températures</title>
+
+    <!-- Leaflet -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+        }
+
+        header {
+            background: #ffffff;
+            padding: 15px 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            position: relative;
+            z-index: 1000;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        header p {
+            margin: 5px 0 0;
+            color: #666;
+        }
+
+        #map {
+            height: calc(100vh - 90px);
+            width: 100%;
+        }
+
+        .temperature {
+            border-radius: 50%;
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 13px;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+        }
+
+        .legend {
+            background: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            line-height: 1.6;
+        }
+
+        .legend-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>🌡️ Météo World</h1>
+    <p>Températures en France</p>
+</header>
+
+<div id="map"></div>
+
+<!-- Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+    // Création de la carte
+    const map = L.map('map').setView([46.5, 2.5], 6);
+
+    // Fond de carte OpenStreetMap
+    L.tileLayer(
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+            attribution: '&copy; OpenStreetMap contributors'
+        }
+    ).addTo(map);
+
+
+    // Fonction permettant de choisir une couleur
+    // en fonction de la température
+    function temperatureColor(temp) {
+
+        if (temp < 0) return '#4b0082';
+        if (temp < 5) return '#4169e1';
+        if (temp < 10) return '#00a6ff';
+        if (temp < 15) return '#00b894';
+        if (temp < 20) return '#8bc34a';
+        if (temp < 25) return '#ffd32a';
+        if (temp < 30) return '#ff9f1a';
+        if (temp < 35) return '#ff5722';
+
+        return '#d63031';
+    }
+
+
+    // Données de démonstration
+    // Nous les remplacerons ensuite par NOAA/GFS
+    const temperatures = [
+
+        { ville: "Paris", lat: 48.8566, lon: 2.3522, temp: 25 },
+        { ville: "Lille", lat: 50.6292, lon: 3.0573, temp: 23 },
+        { ville: "Strasbourg", lat: 48.5734, lon: 7.7521, temp: 27 },
+        { ville: "Nantes", lat: 47.2184, lon: -1.5536, temp: 24 },
+        { ville: "Rennes", lat: 48.1173, lon: -1.6778, temp: 23 },
+        { ville: "Bordeaux", lat: 44.8378, lon: -0.5792, temp: 29 },
+        { ville: "Toulouse", lat: 43.6047, lon: 1.4442, temp: 31 },
+        { ville: "Montpellier", lat: 43.6108, lon: 3.8767, temp: 32 },
+        { ville: "Perpignan", lat: 42.6886, lon: 2.8948, temp: 33 },
+        { ville: "Marseille", lat: 43.2965, lon: 5.3698, temp: 31 },
+        { ville: "Nice", lat: 43.7102, lon: 7.2620, temp: 29 },
+        { ville: "Lyon", lat: 45.7640, lon: 4.8357, temp: 28 },
+        { ville: "Clermont-Ferrand", lat: 45.7772, lon: 3.0870, temp: 27 },
+        { ville: "Limoges", lat: 45.8336, lon: 1.2611, temp: 26 },
+        { ville: "Dijon", lat: 47.3220, lon: 5.0415, temp: 26 }
+    ];
+
+
+    // Création des marqueurs
+    temperatures.forEach(point => {
+
+        const couleur = temperatureColor(point.temp);
+
+        const icon = L.divIcon({
+            className: '',
+            html: `
+                <div
+                    class="temperature"
+                    style="background:${couleur};"
+                >
+                    ${point.temp}°
+                </div>
+            `,
+            iconSize: [42, 42],
+            iconAnchor: [21, 21]
+        });
+
+        L.marker(
+            [point.lat, point.lon],
+            { icon: icon }
+        )
+        .addTo(map)
+        .bindPopup(`
+            <strong>${point.ville}</strong><br>
+            Température : <strong>${point.temp} °C</strong>
+        `);
+    });
+
+
+    // Légende
+    const legend = L.control({ position: 'bottomright' });
+
+    legend.onAdd = function() {
+
+        const div = L.DomUtil.create('div', 'legend');
+
+        div.innerHTML = `
+            <div class="legend-title">Température</div>
+            🟣 < 0 °C<br>
+            🔵 0 à 9 °C<br>
+            🟢 10 à 19 °C<br>
+            🟡 20 à 24 °C<br>
+            🟠 25 à 29 °C<br>
+            🔴 30 °C et +
+        `;
+
+        return div;
+    };
+
+    legend.addTo(map);
+
+</script>
+
+</body>
+</html>
