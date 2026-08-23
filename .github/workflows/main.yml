@@ -1,3 +1,4 @@
+
 name: Mise à jour météo NOAA GFS
 
 on:
@@ -37,6 +38,7 @@ jobs:
 
           now = datetime.now(timezone.utc)
 
+          # Cycles GFS disponibles
           cycles = [18, 12, 6, 0]
 
           downloaded = False
@@ -47,6 +49,7 @@ jobs:
 
               for cycle in cycles:
 
+                  # Ne pas essayer un cycle qui n'est pas encore disponible
                   if days_back == 0 and cycle > now.hour:
                       continue
 
@@ -57,45 +60,68 @@ jobs:
                       "https://nomads.ncep.noaa.gov/cgi-bin/"
                       "filter_gfs_0p25.pl?"
                       f"file=gfs.t{hh}z.pgrb2.0p25.f000"
-                   "&lev_2_m_above_ground=on"
-"&var_TMP=on"
-"&subregion="
-"&leftlon=-6"
-"&rightlon=10"
-"&toplat=52"
-"&bottomlat=41"
+                      "&lev_2_m_above_ground=on"
+                      "&var_TMP=on"
+                      "&subregion="
+                      "&leftlon=-6"
+                      "&rightlon=10"
+                      "&toplat=52"
+                      "&bottomlat=41"
                       f"&dir=%2Fgfs.{date_str}%2F{hh}%2Fatmos"
                   )
 
                   print("Test :", url)
 
-                  response = requests.get(
-                      url,
-                      timeout=120
-                  )
+                  try:
 
-                  if response.status_code == 200 and len(response.content) > 1000:
-
-                      Path("temperature.grib2").write_bytes(
-                          response.content
+                      response = requests.get(
+                          url,
+                          timeout=120
                       )
 
-                      Path("gfs_info.txt").write_text(
-                          f"{date_str} {hh}Z",
-                          encoding="utf-8"
-                      )
+                      if (
+                          response.status_code == 200
+                          and len(response.content) > 1000
+                      ):
+
+                          Path(
+                              "temperature.grib2"
+                          ).write_bytes(
+                              response.content
+                          )
+
+                          Path(
+                              "gfs_info.txt"
+                          ).write_text(
+                              f"{date_str} {hh}Z",
+                              encoding="utf-8"
+                          )
+
+                          print(
+                              f"GFS trouvé : {date_str} {hh}Z"
+                          )
+
+                          print(
+                              f"Taille du fichier : "
+                              f"{len(response.content) / 1024 / 1024:.2f} MB"
+                          )
+
+                          downloaded = True
+
+                          break
+
+                  except Exception as e:
 
                       print(
-                          f"GFS trouvé : {date_str} {hh}Z"
+                          "Erreur de téléchargement :",
+                          e
                       )
-
-                      downloaded = True
-                      break
 
               if downloaded:
                   break
 
           if not downloaded:
+
               raise RuntimeError(
                   "Impossible de trouver un cycle GFS disponible."
               )
@@ -104,10 +130,14 @@ jobs:
       - name: Lire le GRIB2 et créer le JSON
         run: |
           python <<'PY'
+
           import json
           import numpy as np
           import xarray as xr
           from datetime import datetime, timezone
+          from pathlib import Path
+
+          print("Ouverture du fichier GFS...")
 
           ds = xr.open_dataset(
               "temperature.grib2",
@@ -116,7 +146,13 @@ jobs:
 
           print(ds)
 
+          # Première variable disponible
           variable = list(ds.data_vars)[0]
+
+          print(
+              "Variable utilisée :",
+              variable
+          )
 
           data = ds[variable]
 
@@ -125,6 +161,16 @@ jobs:
           temps = data.values
 
           points = []
+
+          print(
+              "Nombre de latitudes :",
+              len(lats)
+          )
+
+          print(
+              "Nombre de longitudes :",
+              len(lons)
+          )
 
           for i in range(len(lats)):
 
@@ -135,54 +181,101 @@ jobs:
                   if np.isnan(value):
                       continue
 
+                  temperature_celsius = (
+                      float(value) - 273.15
+                  )
+
                   points.append({
-                      "lat": round(float(lats[i]), 3),
-                      "lon": round(float(lons[j]), 3),
-                      "temp": round(float(value - 273.15), 1)
+
+                      "lat": round(
+                          float(lats[i]),
+                          3
+                      ),
+
+                      "lon": round(
+                          float(lons[j]),
+                          3
+                      ),
+
+                      "temp": round(
+                          temperature_celsius,
+                          1
+                      )
+
                   })
 
-          info = open(
-              "gfs_info.txt",
+          info = Path(
+              "gfs_info.txt"
+          ).read_text(
               encoding="utf-8"
-          ).read()
+          )
 
           output = {
+
               "source": "NOAA GFS",
+
               "model": "GFS 0.25°",
+
               "cycle": info,
+
               "updated": datetime.now(
                   timezone.utc
               ).isoformat(),
+
+              "area": {
+                  "west": -6,
+                  "east": 10,
+                  "north": 52,
+                  "south": 41
+              },
+
               "points": points
+
           }
 
-          with open(
-              "data/temperatures.json",
-              "w",
-              encoding="utf-8"
-          ) as f:
+          Path(
+              "data/temperatures.json"
+          ).write_text(
 
-              json.dump(
+              json.dumps(
                   output,
-                  f,
                   ensure_ascii=False,
-                  separators=(",", ":")
-              )
+                  separators=(
+                      ",",
+                      ":"
+                  )
+              ),
+
+              encoding="utf-8"
+
+          )
+
+          print(
+              "================================"
+          )
 
           print(
               "Points météo générés :",
               len(points)
           )
+
+          print(
+              "================================"
+          )
+
           PY
 
       - name: Publier les données
         run: |
+
           git config user.name "Meteo World Bot"
+
           git config user.email "actions@github.com"
 
           git add data/temperatures.json
 
           git diff --cached --quiet || \
-            git commit -m "Mise à jour des données NOAA GFS"
+            git commit \
+            -m "Mise à jour des données NOAA GFS"
 
           git push
