@@ -1,1 +1,907 @@
-<!DOCTYPE html> <html lang="fr"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>Météo World - Températures</title> <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /> <style> * { box-sizing: border-box; } body { margin: 0; font-family: Arial, sans-serif; background: #f4f6f8; } header { background: white; padding: 15px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); position: relative; z-index: 1000; } header h1 { margin: 0; font-size: 24px; } header p { margin: 5px 0 0; color: #666; } #map { height: calc(100vh - 90px); width: 100%; } .legend { background: rgba(255,255,255,0.95); padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); min-width: 220px; } .legend-title { font-weight: bold; margin-bottom: 8px; } .gradient { height: 18px; width: 200px; background: linear-gradient( to right, #4b0082, #4169e1, #00a6ff, #00b894, #8bc34a, #ffd32a, #ff9f1a, #ff5722, #d63031 ); border-radius: 4px; } .legend-values { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; } </style> </head> <body> <header> <h1>🌡️ Météo World</h1> <p>Températures en France</p> </header> <div id="map"></div> <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> <script> /* ============================================================ CARTE ============================================================ */ const map = L.map('map').setView([46.5, 2.5], 6); L.tileLayer( 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' } ).addTo(map); /* ============================================================ DONNÉES DE TEST ============================================================ Ces températures sont uniquement destinées à tester le rendu de la carte. Elles seront remplacées par la grille NOAA/GFS. */ const temperatures = [ { lat: 50.6, lon: 3.0, temp: 23 }, { lat: 49.0, lon: 2.0, temp: 25 }, { lat: 48.0, lon: 7.5, temp: 27 }, { lat: 47.2, lon: -1.5, temp: 24 }, { lat: 46.0, lon: 2.0, temp: 26 }, { lat: 45.0, lon: -1.0, temp: 29 }, { lat: 44.0, lon: 1.5, temp: 30 }, { lat: 43.5, lon: 3.5, temp: 32 }, { lat: 42.7, lon: 2.9, temp: 33 }, { lat: 43.3, lon: 5.4, temp: 31 }, { lat: 43.7, lon: 7.3, temp: 29 }, { lat: 45.8, lon: 4.8, temp: 28 }, { lat: 45.8, lon: 3.1, temp: 27 }, { lat: 47.3, lon: 5.0, temp: 26 } ]; /* ============================================================ COULEUR TEMPÉRATURE ============================================================ */ function temperatureColor(temp) { if (temp <= 0) return '#4b0082'; if (temp <= 5) return '#4169e1'; if (temp <= 10) return '#00a6ff'; if (temp <= 15) return '#00b894'; if (temp <= 20) return '#8bc34a'; if (temp <= 25) return '#ffd32a'; if (temp <= 30) return '#ff9f1a'; if (temp <= 35) return '#ff5722'; return '#d63031'; } /* ============================================================ COUCHE DE TEMPÉRATURE ============================================================ On utilise Leaflet.heat pour créer une interpolation visuelle entre les points. */ const script = document.createElement('script'); script.src = 'https://unpkg.com/leaflet.heat/dist/leaflet-heat.js'; script.onload = function() { const heatData = temperatures.map(point => { /* Conversion de la température en intensité. 0°C -> faible 35°C -> forte */ const intensity = Math.max(0.1, Math.min(1, point.temp / 35)); return [ point.lat, point.lon, intensity ]; }); L.heatLayer( heatData, { radius: 65, blur: 45, maxZoom: 8, minOpacity: 0.45, gradient: { 0.00: '#4b0082', 0.12: '#4169e1', 0.25: '#00a6ff', 0.40: '#00b894', 0.55: '#8bc34a', 0.68: '#ffd32a', 0.78: '#ff9f1a', 0.90: '#ff5722', 1.00: '#d63031' } } ).addTo(map); }; document.head.appendChild(script); /* ============================================================ LÉGENDE ============================================================ */ const legend = L.control({ position: 'bottomright' }); legend.onAdd = function() { const div = L.DomUtil.create( 'div', 'legend' ); div.innerHTML = ` <div class="legend-title"> Température </div> <div class="gradient"></div> <div class="legend-values"> <span>0°C</span> <span>5°C</span> <span>10°C</span> <span>15°C</span> <span>20°C</span> <span>25°C</span> <span>30°C</span> <span>35°C+</span> </div> `; return div; }; legend.addTo(map); </script> </body> </html>
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Météo World - Températures</title>
+
+    <meta
+        name="description"
+        content="Carte des températures en France basée sur le modèle NOAA GFS."
+    >
+
+    <!-- Leaflet -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f4f6f8;
+        }
+
+        header {
+
+            height: 82px;
+
+            background: white;
+
+            padding: 12px 20px;
+
+            box-shadow:
+                0 2px 8px
+                rgba(0,0,0,0.15);
+
+            position: relative;
+
+            z-index: 2000;
+        }
+
+        header h1 {
+
+            margin: 0;
+
+            font-size: 24px;
+        }
+
+        header p {
+
+            margin: 5px 0 0;
+
+            color: #666;
+
+            font-size: 14px;
+        }
+
+        #map {
+
+            width: 100%;
+
+            height:
+                calc(100vh - 82px);
+        }
+
+        /*
+        ------------------------------------------------
+        TEMPÉRATURES DES VILLES
+        ------------------------------------------------
+        */
+
+        .city-temperature {
+
+            background: rgba(255,255,255,0.92);
+
+            border-radius: 5px;
+
+            padding: 3px 6px;
+
+            font-weight: bold;
+
+            font-size: 13px;
+
+            color: #111;
+
+            white-space: nowrap;
+
+            border:
+                1px solid
+                rgba(0,0,0,0.25);
+
+            box-shadow:
+                0 1px 4px
+                rgba(0,0,0,0.25);
+        }
+
+        .city-name {
+
+            font-size: 11px;
+
+            font-weight: normal;
+
+            display: block;
+
+            text-align: center;
+
+            margin-bottom: 1px;
+        }
+
+        /*
+        ------------------------------------------------
+        LÉGENDE
+        ------------------------------------------------
+        */
+
+        .legend {
+
+            background:
+                rgba(255,255,255,0.96);
+
+            padding: 12px;
+
+            border-radius: 8px;
+
+            box-shadow:
+                0 2px 8px
+                rgba(0,0,0,0.25);
+
+            width: 260px;
+        }
+
+        .legend-title {
+
+            font-weight: bold;
+
+            margin-bottom: 8px;
+
+            font-size: 14px;
+        }
+
+        .gradient {
+
+            height: 18px;
+
+            width: 100%;
+
+            border-radius: 4px;
+
+            background:
+                linear-gradient(
+                    to right,
+
+                    #4b0082 0%,
+                    #4169e1 12%,
+                    #00a6ff 25%,
+                    #00b894 40%,
+                    #8bc34a 55%,
+                    #ffd32a 68%,
+                    #ff9f1a 78%,
+                    #ff5722 90%,
+                    #d63031 100%
+                );
+        }
+
+        .legend-values {
+
+            display: flex;
+
+            justify-content:
+                space-between;
+
+            font-size: 10px;
+
+            margin-top: 4px;
+        }
+
+        /*
+        ------------------------------------------------
+        INFO MODÈLE
+        ------------------------------------------------
+        */
+
+        .model-info {
+
+            background:
+                rgba(255,255,255,0.95);
+
+            padding: 8px 12px;
+
+            border-radius: 7px;
+
+            box-shadow:
+                0 2px 6px
+                rgba(0,0,0,0.2);
+
+            font-size: 12px;
+        }
+
+        /*
+        ------------------------------------------------
+        MOBILE
+        ------------------------------------------------
+        */
+
+        @media (max-width: 600px) {
+
+            header {
+
+                height: 70px;
+
+                padding: 10px 15px;
+            }
+
+            header h1 {
+
+                font-size: 20px;
+            }
+
+            header p {
+
+                font-size: 12px;
+            }
+
+            #map {
+
+                height:
+                    calc(100vh - 70px);
+            }
+
+            .legend {
+
+                width: 200px;
+
+                font-size: 11px;
+            }
+
+            .city-temperature {
+
+                font-size: 11px;
+
+                padding: 2px 4px;
+            }
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<header>
+
+    <h1>
+        🌡️ Météo World
+    </h1>
+
+    <p id="subtitle">
+        Chargement des données NOAA GFS...
+    </p>
+
+</header>
+
+
+<div id="map"></div>
+
+
+<!-- Leaflet -->
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+</script>
+
+
+<!-- Heatmap -->
+
+<script
+    src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js">
+</script>
+
+
+<script>
+
+
+/*
+============================================================
+CARTE
+============================================================
+*/
+
+const map =
+    L.map('map')
+    .setView(
+        [46.5, 2.5],
+        6
+    );
+
+
+/*
+============================================================
+FOND DE CARTE
+============================================================
+*/
+
+L.tileLayer(
+
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+
+    {
+
+        attribution:
+            '&copy; OpenStreetMap contributors',
+
+        maxZoom: 19
+
+    }
+
+).addTo(map);
+
+
+/*
+============================================================
+COULEUR TEMPÉRATURE
+============================================================
+*/
+
+function temperatureColor(temp) {
+
+    if (temp <= 0)
+        return '#4b0082';
+
+    if (temp <= 5)
+        return '#4169e1';
+
+    if (temp <= 10)
+        return '#00a6ff';
+
+    if (temp <= 15)
+        return '#00b894';
+
+    if (temp <= 20)
+        return '#8bc34a';
+
+    if (temp <= 25)
+        return '#ffd32a';
+
+    if (temp <= 30)
+        return '#ff9f1a';
+
+    if (temp <= 35)
+        return '#ff5722';
+
+    return '#d63031';
+}
+
+
+/*
+============================================================
+CHARGEMENT DES DONNÉES GFS
+============================================================
+*/
+
+fetch(
+    'data/temperatures.json?'
+    + Date.now()
+)
+
+.then(response => {
+
+    if (!response.ok) {
+
+        throw new Error(
+            'Impossible de charger les données GFS'
+        );
+
+    }
+
+    return response.json();
+
+})
+
+.then(weather => {
+
+    console.log(
+        'Données GFS reçues :',
+        weather
+    );
+
+
+    /*
+    --------------------------------------------------------
+    INFORMATIONS DU MODÈLE
+    --------------------------------------------------------
+    */
+
+    document.getElementById(
+        'subtitle'
+    ).textContent =
+
+        'Températures à 2 m — '
+        + 'NOAA GFS 0,25° — '
+        + weather.cycle;
+
+
+    /*
+    --------------------------------------------------------
+    POINTS GFS
+    --------------------------------------------------------
+    */
+
+    const points =
+        weather.points;
+
+
+    /*
+    --------------------------------------------------------
+    TRANSFORMATION POUR LE HEATMAP
+    --------------------------------------------------------
+    */
+
+    const heatData =
+        points.map(point => {
+
+            /*
+            Conversion de la température
+            en intensité pour la heatmap.
+
+            0°C = 0
+            35°C = 1
+            */
+
+            const intensity =
+                Math.max(
+                    0,
+                    Math.min(
+                        1,
+                        point.temp / 35
+                    )
+                );
+
+
+            return [
+
+                point.lat,
+
+                point.lon,
+
+                intensity
+
+            ];
+
+        });
+
+
+    /*
+    --------------------------------------------------------
+    COUCHE DEGRADÉ
+    --------------------------------------------------------
+    */
+
+    L.heatLayer(
+
+        heatData,
+
+        {
+
+            radius: 55,
+
+            blur: 35,
+
+            maxZoom: 8,
+
+            minOpacity: 0.45,
+
+            max: 1,
+
+            gradient: {
+
+                0.00: '#4b0082',
+
+                0.12: '#4169e1',
+
+                0.25: '#00a6ff',
+
+                0.40: '#00b894',
+
+                0.55: '#8bc34a',
+
+                0.68: '#ffd32a',
+
+                0.78: '#ff9f1a',
+
+                0.90: '#ff5722',
+
+                1.00: '#d63031'
+
+            }
+
+        }
+
+    ).addTo(map);
+
+
+    /*
+    --------------------------------------------------------
+    GRANDES VILLES
+    --------------------------------------------------------
+
+    On récupère la température du point GFS
+    le plus proche de chaque ville.
+    */
+
+    const cities = [
+
+        {
+            name: 'Paris',
+            lat: 48.8566,
+            lon: 2.3522
+        },
+
+        {
+            name: 'Marseille',
+            lat: 43.2965,
+            lon: 5.3698
+        },
+
+        {
+            name: 'Lyon',
+            lat: 45.7640,
+            lon: 4.8357
+        },
+
+        {
+            name: 'Toulouse',
+            lat: 43.6047,
+            lon: 1.4442
+        },
+
+        {
+            name: 'Nice',
+            lat: 43.7102,
+            lon: 7.2620
+        },
+
+        {
+            name: 'Nantes',
+            lat: 47.2184,
+            lon: -1.5536
+        },
+
+        {
+            name: 'Montpellier',
+            lat: 43.6108,
+            lon: 3.8767
+        },
+
+        {
+            name: 'Strasbourg',
+            lat: 48.5734,
+            lon: 7.7521
+        },
+
+        {
+            name: 'Bordeaux',
+            lat: 44.8378,
+            lon: -0.5792
+        },
+
+        {
+            name: 'Lille',
+            lat: 50.6292,
+            lon: 3.0573
+        },
+
+        {
+            name: 'Rennes',
+            lat: 48.1173,
+            lon: -1.6778
+        },
+
+        {
+            name: 'Grenoble',
+            lat: 45.1885,
+            lon: 5.7245
+        },
+
+        {
+            name: 'Perpignan',
+            lat: 42.6886,
+            lon: 2.8948
+        },
+
+        {
+            name: 'Dijon',
+            lat: 47.3220,
+            lon: 5.0415
+        },
+
+        {
+            name: 'Clermont-Ferrand',
+            lat: 45.7772,
+            lon: 3.0870
+        },
+
+        {
+            name: 'Limoges',
+            lat: 45.8336,
+            lon: 1.2611
+        },
+
+        {
+            name: 'Tours',
+            lat: 47.3941,
+            lon: 0.6848
+        },
+
+        {
+            name: 'Orléans',
+            lat: 47.9030,
+            lon: 1.9093
+        },
+
+        {
+            name: 'Reims',
+            lat: 49.2583,
+            lon: 4.0317
+        },
+
+        {
+            name: 'Metz',
+            lat: 49.1193,
+            lon: 6.1757
+        }
+
+    ];
+
+
+    /*
+    --------------------------------------------------------
+    TROUVER LE POINT GFS LE PLUS PROCHE
+    --------------------------------------------------------
+    */
+
+    function nearestTemperature(
+        lat,
+        lon
+    ) {
+
+        let nearest =
+            null;
+
+        let distance =
+            Infinity;
+
+
+        points.forEach(point => {
+
+            const dLat =
+                point.lat - lat;
+
+            const dLon =
+                point.lon - lon;
+
+
+            const d =
+                dLat * dLat
+                +
+                dLon * dLon;
+
+
+            if (d < distance) {
+
+                distance = d;
+
+                nearest =
+                    point.temp;
+
+            }
+
+        });
+
+
+        return nearest;
+
+    }
+
+
+    /*
+    --------------------------------------------------------
+    AFFICHAGE DES VILLES
+    --------------------------------------------------------
+    */
+
+    cities.forEach(city => {
+
+        const temp =
+            nearestTemperature(
+                city.lat,
+                city.lon
+            );
+
+
+        if (temp === null)
+            return;
+
+
+        const icon =
+            L.divIcon({
+
+                className: '',
+
+                html:
+
+                    '<div class="city-temperature">'
+                    +
+
+                    '<span class="city-name">'
+                    +
+                    city.name
+                    +
+                    '</span>'
+
+                    +
+
+                    Math.round(temp)
+                    +
+                    '°'
+
+                    +
+                    '</div>',
+
+                iconSize:
+                    [70, 40],
+
+                iconAnchor:
+                    [35, 20]
+
+            });
+
+
+        L.marker(
+
+            [
+                city.lat,
+                city.lon
+            ],
+
+            {
+                icon:
+                    icon,
+
+                interactive:
+                    true
+            }
+
+        )
+
+        .addTo(map)
+
+        .bindPopup(
+
+            '<strong>'
+            +
+            city.name
+            +
+            '</strong><br>'
+            +
+
+            'Température GFS : '
+            +
+
+            '<strong>'
+            +
+            temp.toFixed(1)
+            +
+            ' °C'
+            +
+            '</strong>'
+
+        );
+
+    });
+
+
+    /*
+    --------------------------------------------------------
+    LÉGENDE
+    --------------------------------------------------------
+    */
+
+    const legend =
+        L.control({
+
+            position:
+                'bottomright'
+
+        });
+
+
+    legend.onAdd =
+        function() {
+
+            const div =
+                L.DomUtil.create(
+                    'div',
+                    'legend'
+                );
+
+
+            div.innerHTML = `
+
+                <div class="legend-title">
+                    Température à 2 m
+                </div>
+
+                <div class="gradient"></div>
+
+                <div class="legend-values">
+
+                    <span>0°</span>
+
+                    <span>5°</span>
+
+                    <span>10°</span>
+
+                    <span>15°</span>
+
+                    <span>20°</span>
+
+                    <span>25°</span>
+
+                    <span>30°</span>
+
+                    <span>35°+</span>
+
+                </div>
+
+                <div
+                    style="
+                        margin-top:8px;
+                        font-size:10px;
+                        color:#666;
+                    "
+                >
+
+                    Source : NOAA GFS
+                    <br>
+                    Mise à jour :
+                    ${weather.updated}
+
+                </div>
+
+            `;
+
+
+            return div;
+
+        };
+
+
+    legend.addTo(map);
+
+
+})
+
+.catch(error => {
+
+    console.error(
+        error
+    );
+
+
+    document.getElementById(
+        'subtitle'
+    ).textContent =
+
+        'Erreur lors du chargement des données météo';
+
+});
+
+
+</script>
+
+</body>
+
+</html>
