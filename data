@@ -1,1 +1,6 @@
-
+{
+  "source": "NOAA GFS",
+  "model": "GFS 0.25°",
+  "updated": null,
+  "temperatures": []
+}
