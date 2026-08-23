@@ -1,18 +1,187 @@
-name: Test NOAA GFS
+name: Mise à jour météo NOAA GFS
 
 on:
   workflow_dispatch:
 
+  schedule:
+    - cron: "15 */6 * * *"
+
+permissions:
+  contents: write
+
 jobs:
-  test-noaa:
+  update-weather:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Télécharger une donnée GFS
-        run: |
-          wget -O temperature.grib2 \
-          "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl?file=gfs.t00z.pgrb2.0p25.f000&lev_2_m_above_ground=on&var_TMP=on&leftlon=-5&rightlon=10&toplat=52&bottomlat=41&dir=%2Fgfs.20260821%2F00%2Fatmos"
 
-      - name: Vérifier le fichier
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les bibliothèques météo
         run: |
-          ls -lh temperature.grib2
+          python -m pip install --upgrade pip
+          pip install cfgrib eccodes xarray numpy requests
+
+      - name: Télécharger le GFS NOAA
+        run: |
+          python <<'PY'
+          import requests
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc)
+
+          cycles = [18, 12, 6, 0]
+
+          downloaded = False
+
+          for days_back in range(0, 3):
+
+              date = now - timedelta(days=days_back)
+
+              for cycle in cycles:
+
+                  if days_back == 0 and cycle > now.hour:
+                      continue
+
+                  date_str = date.strftime("%Y%m%d")
+                  hh = f"{cycle:02d}"
+
+                  url = (
+                      "https://nomads.ncep.noaa.gov/cgi-bin/"
+                      "filter_gfs_0p25.pl?"
+                      f"file=gfs.t{hh}z.pgrb2.0p25.f000"
+                      "&lev_2_m_above_ground=on"
+                      "&var_TMP=on"
+                      "&leftlon=-6"
+                      "&rightlon=10"
+                      "&toplat=52"
+                      "&bottomlat=41"
+                      f"&dir=%2Fgfs.{date_str}%2F{hh}%2Fatmos"
+                  )
+
+                  print("Test :", url)
+
+                  response = requests.get(
+                      url,
+                      timeout=120
+                  )
+
+                  if response.status_code == 200 and len(response.content) > 1000:
+
+                      Path("temperature.grib2").write_bytes(
+                          response.content
+                      )
+
+                      Path("gfs_info.txt").write_text(
+                          f"{date_str} {hh}Z",
+                          encoding="utf-8"
+                      )
+
+                      print(
+                          f"GFS trouvé : {date_str} {hh}Z"
+                      )
+
+                      downloaded = True
+                      break
+
+              if downloaded:
+                  break
+
+          if not downloaded:
+              raise RuntimeError(
+                  "Impossible de trouver un cycle GFS disponible."
+              )
+          PY
+
+      - name: Lire le GRIB2 et créer le JSON
+        run: |
+          python <<'PY'
+          import json
+          import numpy as np
+          import xarray as xr
+          from datetime import datetime, timezone
+
+          ds = xr.open_dataset(
+              "temperature.grib2",
+              engine="cfgrib"
+          )
+
+          print(ds)
+
+          variable = list(ds.data_vars)[0]
+
+          data = ds[variable]
+
+          lats = data.latitude.values
+          lons = data.longitude.values
+          temps = data.values
+
+          points = []
+
+          for i in range(len(lats)):
+
+              for j in range(len(lons)):
+
+                  value = temps[i][j]
+
+                  if np.isnan(value):
+                      continue
+
+                  points.append({
+                      "lat": round(float(lats[i]), 3),
+                      "lon": round(float(lons[j]), 3),
+                      "temp": round(float(value - 273.15), 1)
+                  })
+
+          info = open(
+              "gfs_info.txt",
+              encoding="utf-8"
+          ).read()
+
+          output = {
+              "source": "NOAA GFS",
+              "model": "GFS 0.25°",
+              "cycle": info,
+              "updated": datetime.now(
+                  timezone.utc
+              ).isoformat(),
+              "points": points
+          }
+
+          with open(
+              "data/temperatures.json",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              json.dump(
+                  output,
+                  f,
+                  ensure_ascii=False,
+                  separators=(",", ":")
+              )
+
+          print(
+              "Points météo générés :",
+              len(points)
+          )
+          PY
+
+      - name: Publier les données
+        run: |
+          git config user.name "Meteo World Bot"
+          git config user.email "actions@github.com"
+
+          git add data/temperatures.json
+
+          git diff --cached --quiet || \
+            git commit -m "Mise à jour des données NOAA GFS"
+
+          git push
