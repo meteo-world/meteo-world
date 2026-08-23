@@ -1,0 +1,18 @@
+name: Test NOAA GFS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-noaa:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Télécharger une donnée GFS
+        run: |
+          wget -O temperature.grib2 \
+          "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl?file=gfs.t00z.pgrb2.0p25.f000&lev_2_m_above_ground=on&var_TMP=on&leftlon=-5&rightlon=10&toplat=52&bottomlat=41&dir=%2Fgfs.20260821%2F00%2Fatmos"
+
+      - name: Vérifier le fichier
+        run: |
+          ls -lh temperature.grib2
